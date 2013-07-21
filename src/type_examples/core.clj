@@ -3,8 +3,13 @@
    1. https://github.com/clojure/core.typed/wiki/Quick-Guide
    2. http://www.clojure.net/2013/03/14/Typed-Clojure/
    Much thanks to both authors!"
-  (:require [clojure.core.typed :as t]))
+  (:require [clojure.core.typed :as t])
+  (:import (clojure.lang Seqable IPersistentVector Symbol Keyword ISeq Indexed)))
 
+
+;; See what the type signature of a form is,
+;; (t/cf (fn [] 5)) 
+;; => [(Fn [-> (Value 5)]) {:then tt, :else ff}]
 
 ;; Annotate the type for a simple var
 (t/ann x Long)
@@ -14,10 +19,8 @@
 (t/ann add [Number Number -> Number])
 (defn add [a b]
   (+ a b))
-
-;; Provide a function, and see what the type signature is
-;; (t/cf (fn [] 5)) 
-;; => [(Fn [-> (Value 5)]) {:then tt, :else ff}]
+(t/ann add-test Number)
+(def add-test (add 1 2))
 
 ;; This is what a function of no arguments looks like.
 ;; Notice that even though x is already annotated we have to provide the 
@@ -25,6 +28,8 @@
 ;; signatures don't match!
 (t/ann get-x [-> Number])
 (defn get-x [] x)
+(t/ann get-x-test Number)
+(def get-x-test (get-x))
 
 ;; Don't forget that Clojure returns nil if no return value is provided
 (t/ann foo [String -> nil])
@@ -37,25 +42,44 @@
 (t/ann foo-case [-> nil])
 (defn foo-case [] (foo "harhar"))
 
-;; Handle a seq full of something unknown
-(t/ann get-first (All [x] [(Vector* x) -> x]))
-(defn get-first [s]
-  ;; (let [[x & xs] s]
-  ;;   x)
-  (first s)
-  )
+;; Handle a seq full of something unknown, by fn
+;; (t/ann get-first-by-first (All [x] [(Seqable x) -> x]))
+(t/ann get-first-by-first (All [x] (Fn [(t/Option (I (Seqable x) (ExactCount 0))) -> nil] 
+                                       [(I (Seqable x) (CountRange 1)) -> x] 
+                                       [(t/Option (Seqable x)) -> (t/Option x)])))
+(defn get-first-by-first [s]
+  (first s))
+;; NOTE: above passes check-ns but doesn't actually work!!!
+(t/ann get-first-by-first-test Number)
+(def get-first-by-first-test (get-first-by-first [1]))
+(t/ann get-first-by-first-test-two Number)
+(def get-first-by-first-test-two (get-first-by-first [1 2 3]))
+;; The below fails though...
+;; (t/ann get-first-by-first-test-three Number)
+;; (def get-first-by-first-test-three (get-first-by-first [1 :two "three"]))
 
-(t/ann haha Number)
-(def haha (get-first [1]))
 
-;; 
-;; (t/ann handle-vec [(All [x] )
-;; (Vector* Any) -> Any])
+
+;; Handle a seq full of something unknown, by destructuring
+;;(t/ann get-first-by-destruct (All [x] [(Vector* x) -> x]))
+(t/ann get-first-by-destruct (All [x] 
+                                  [(Seqable x) -> (U nil x)]
+;;                                  [(U (Indexed x) (Seqable x)) -> (U x nil)]
+))
+(defn get-first-by-destruct [s]
+  (let [[x & xs] s]
+    x))
+;; NOTE: above passes check-ns but doesn't actually work!!!
+;; (t/ann get-first-by-destruct-test Number)
+;; (def get-first-by-destruct-test (get-first-by-destruct [1]))
+
+;; (t/ann handle-vec [(Vector* Any) -> Number])
 ;; (defn handle-vec [v]
-;;   (first v))
+;;   (count v))
+;; NOTE: above passes check-ns but doesn't actually work!!!
+;; (t/ann handle-vec-test Number)
+;; (def handle-vec-test (handle-vec [1 2 3]))
 
-;; (t/ann handle-vec-ok Number)
-;; (def handle-vec-ok (handle-vec [x]))
 
 ;; Use HMap to handle Clojure map types
 (t/ann handle-map [(HMap) -> (HMap)])
@@ -77,6 +101,11 @@
 
 ;; (t/ann error-call-two [-> nil])
 ;; (defn error-call-two [] (do (wrap-response {:a "1"}) nil))
+
+
+(defn compile-time-type-check [a]
+  (t/ann-form a Number) ;; Errors at compile time if not number
+  (class a))
 
 
 (comment
