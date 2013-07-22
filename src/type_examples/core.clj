@@ -8,26 +8,29 @@
 
 
 ;; Note: To see, or confirm, what the type signature of a form is;
-;; -----------------------------------------
+;; ---------------------------------------------------------------
 ;; (t/cf (fn [] 5)) 
 ;; => [(Fn [-> (Value 5)]) {:then tt, :else ff}]
+;;
 ;; (t/cf [1 2 3] (clojure.lang.Seqable Number))
 ;; => (Seqable Number)
 
 
 ;; Annotate the type for a simple var
 ;; ----------------------------------
-(t/ann x Long)
-(def x 10)
+(t/ann x-num Long)
+(def x-num 10)
 
 
-;; Now for a function that takes two numbers (Long, Integer, etc), and returns a single number
-;; -------------------------------------------------------------------------------------------
+;; Now for a function that takes two 'Number's (Long, Integer, etc), and returns a single Number
+;; ---------------------------------------------------------------------------------------------
 (t/ann add [Number Number -> Number])
 (defn add [a b]
   (+ a b))
 (t/ann add-test Number)
 (def add-test (add 1 2))
+(t/ann add-test-two Number)
+(def add-test-two (add 1.0 2))
 
 
 ;; This is what a function of no arguments looks like.
@@ -35,10 +38,10 @@
 ;; signature for the function, but at least it'll throw an error if the 
 ;; signatures don't match!
 ;; -----------------------
-(t/ann get-x [-> Number])
-(defn get-x [] x)
-(t/ann get-x-test Number)
-(def get-x-test (get-x))
+(t/ann get-x-num [-> Number])
+(defn get-x-num [] x-num)
+(t/ann get-x-num-test Number)
+(def get-x-num-test (get-x-num))
 
 
 ;; Don't forget that Clojure returns nil if no return value is provided
@@ -50,18 +53,18 @@
   (println x "Hello, World!"))
 
 
-;; A function of no arguments and no return values (besides nil)
-;; -------------------------------------------------------------
+;; A function of no arguments, and no return values (besides nil)
+;; --------------------------------------------------------------
 (t/ann foo-case [-> nil])
-(defn foo-case [] (foo "harhar"))
+(defn foo-case [] (foo "foo "))
 
 
-;; Handle a seq full of an unknown type
-;; ------------------------------------
+;; Handle a seq of an unknown type
+;; -------------------------------
 (t/ann get-first-by-first (All [x] (Fn [nil -> nil] ;; Handle the case of nil
                                        [(I (clojure.lang.Seqable x) (ExactCount 0)) -> nil] ;; Handle the case of a vector of zero elements
                                        [(I (clojure.lang.Seqable x) (CountRange 1)) -> x] ;; Handle the case of a vector of one or more elements
-                                       [(t/Option (clojure.lang.Seqable x)) -> (t/Option x)] ;; Handle the case of a LazySeq, or an uncountable sequence; unfortunately this doesn't seem to work...
+                                       [(t/Option (clojure.lang.Seqable x)) -> (t/Option x)] ;; Handle the case of a LazySeq, or an uncountable sequence; *NOTE* unfortunately this doesn't seem to work...
                                        )))
 (defn get-first-by-first [s]
   (first s))
@@ -89,10 +92,10 @@
 
 
 ;; Handle a seq full of something unknown, by destructuring...
-;; Shouldn't this have the same signature as get-first-by-first?
+;; *NOTE* Shouldn't this have the same signature as get-first-by-first?
 ;; -------------------------------------------------------------
-;; Unfortunately none of the following work...
-;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;; Unfortunately none of the following works
+;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;; (t/ann get-first-by-destruct (All [x] (Fn [nil -> nil] ;; Handle the case of nil
 ;;                                           [(I (clojure.lang.Seqable x) (ExactCount 0)) -> nil] ;; Handle the case of a vector of zero elements
 ;;                                           [(I (clojure.lang.Seqable x) (CountRange 1)) -> x] ;; Handle the case of a vector of one or more elements
@@ -121,7 +124,6 @@
 ;; (def get-first-by-destruct-test-nine (get-first-by-destruct '(1 2 3)))
 
 
-
 ;; Handle a vector, and return the count of it's elements
 ;; ------------------------------------------------------
 (t/ann count-seq (Fn [nil -> Number]
@@ -139,7 +141,7 @@
 (t/ann count-seq-test-five Number)
 (def count-seq-test-five (count-seq (map inc [1 2 3])))
 
-;; Now, if you want to ensure that nil returns one...
+;; Now, if you want to ensure that nil returns zero...
 (t/ann count-seq-two (Fn [nil -> (Value 0)]
                          [(Seqable Any) -> Number]))
 (defn count-seq-two [v]
@@ -157,10 +159,10 @@
 (t/ann count-seq-two-test-five Number)
 (def count-seq-two-test-five (count-seq-two (map inc [1 2 3])))
 
-;; Or update the signature for clojure.core/count so it's more accurate
-;; --------------------------------------------------------------------
-;; You'd expect this to work, but it doesn't
-;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+;; Or update the signature for clojure.core.RT/count so it's more accurate
+;; -----------------------------------------------------------------------
+;; You might expect this to work, but it doesn't
+;; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ;; (t/ann clojure.lang.RT/count (Fn [nil -> (Value 0)]
 ;;                                  [(U clojure.lang.Counted (Seqable Any)) -> Number]))
 ;; (t/ann count-seq-three (Fn [nil -> (Value 0)]
@@ -171,7 +173,7 @@
 ;; (def count-seq-three-test (count-seq-three [1]))
 ;; (t/ann count-seq-three-test-two Number)
 ;; (def count-seq-three-test-two (count-seq-three [1 2 3]))
-;; (t/ann count-seq-three-test-three Number)
+;; (t/ann count-seq-three-test-three (Value 0))
 ;; (def count-seq-three-test-three (count-seq-three nil))
 ;; (t/ann count-seq-three-test-four Number)
 ;; (def count-seq-three-test-four (count-seq-three '(1 2 3 4)))
@@ -197,7 +199,25 @@
 
 
 
-;; And this is what an error looks like
+;; How to handle a function as an argument
+;; ---------------------------------------
+(t/ann my-fn-handler [(Fn [Number -> Number]) -> Number])
+(defn my-fn-handler [f]
+  (f 5))
+(t/ann my-fn-handler-test Number)
+(def my-fn-handler-test (my-fn-handler inc))
+(t/ann my-fn-handler-test-two Number)
+(def my-fn-handler-test-two (my-fn-handler (t/ann-form #(+ 3 %)
+                                                       [Number -> Number])))
+;; Another example
+(t/ann my-filter (All [x] [(Fn [x -> Any]) (Seqable x) -> (Seqable x)]))
+(defn my-filter [f s]
+  (filter f s))
+(t/ann my-filter-test (Seqable Number))
+(def my-filter-test (filter even? (range 10)))
+
+
+;; This is what an error looks like
 ;; --------------------------------------
 ;; (t/ann error-case [ -> (HMap)])
 ;; (defn error-case [] (handle-hmap 1))
